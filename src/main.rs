@@ -1,3 +1,4 @@
+use clap::Parser;
 use rusb::{Context, UsbContext};
 use std::fs::File;
 use std::io::Write;
@@ -437,34 +438,28 @@ impl DriverState {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        eprintln!(
-            "\nUsage: {} palette.raw [visual_device_path] [thermal_device_path]",
-            args[0]
-        );
-        eprintln!(
-            "Example: {} palettes/Rainbow.raw /dev/video2 /dev/video3",
-            args[0]
-        );
-        eprintln!(
-            "Defaults: visual_device_path = /dev/video2, thermal_device_path = /dev/video3\n"
-        );
-        std::process::exit(1);
-    }
+#[derive(Parser, Debug)]
+#[command(author, version, about = "FLIR One Pro LT / Gen 3 Linux V4L2 Loopback Driver", long_about = None)]
+struct CliArgs {
+    /// Path to the color palette raw file (e.g. palettes/Rainbow.raw)
+    #[arg(short, long)]
+    palette: String,
 
-    let palette_path = &args[1];
-    let video_device1 = if args.len() >= 3 {
-        &args[2]
-    } else {
-        "/dev/video2"
-    };
-    let video_device2 = if args.len() >= 4 {
-        &args[3]
-    } else {
-        "/dev/video3"
-    };
+    /// Path to the visual V4L2 loopback device
+    #[arg(short, long, default_value = "/dev/video2")]
+    visual_device: String,
+
+    /// Path to the thermal V4L2 loopback device
+    #[arg(short, long, default_value = "/dev/video3")]
+    thermal_device: String,
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = CliArgs::parse();
+
+    let palette_path = &args.palette;
+    let video_device1 = &args.visual_device;
+    let video_device2 = &args.thermal_device;
 
     // Read colormap palette file
     let colormap = std::fs::read(palette_path)
