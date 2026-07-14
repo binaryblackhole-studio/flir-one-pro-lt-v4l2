@@ -43,10 +43,19 @@ sudo modprobe v4l2loopback exclusive_caps=1,1,1 video_nr=1,2,3
 *Note: Depending on your system's existing cameras, you may want to customize the `video_nr` devices.*
 
 ### 2. Run the Driver
-Start the driver by passing a color palette raw file. Several palettes are provided in the `palettes/` directory (e.g., Rainbow, Iron2, Grayscale):
+Start the driver by passing a color palette raw file. By default, it expects `/dev/video2` for the visual camera stream and `/dev/video3` for the thermal camera stream:
 
 ```bash
 sudo ./flirone palettes/Rainbow.raw
+```
+
+If you have other video devices active on your system, you can pass custom device paths as optional arguments:
+
+```bash
+sudo ./flirone palettes/Rainbow.raw [visual_device_path] [thermal_device_path]
+
+# Example:
+sudo ./flirone palettes/Rainbow.raw /dev/video4 /dev/video5
 ```
 *(Running with `sudo` or having proper udev rules configured is required to allow `libusb` access to the USB device).*
 

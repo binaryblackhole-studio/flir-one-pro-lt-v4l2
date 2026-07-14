@@ -802,23 +802,37 @@ void vframe(char ep[],char EP_error[], int r, int actual_length, unsigned char b
 
 int main(int argc, char **argv)
 {
-    int i;
     unsigned char colormap[768];
     FILE *fp;
 
 	if(argc < 2) {
-		fprintf(stderr, "\nUsage:flir8o palette.raw\n");
+		fprintf(stderr, "\nUsage: %s palette.raw [visual_device_path] [thermal_device_path]\n", argv[0]);
+		fprintf(stderr, "Example: %s palettes/Rainbow.raw /dev/video2 /dev/video3\n", argv[0]);
+		fprintf(stderr, "Defaults: visual_device_path = /dev/video2, thermal_device_path = /dev/video3\n\n");
 		exit(1);
 	}
 
+	if (argc >= 3) {
+		video_device1 = argv[2];
+	}
+	if (argc >= 4) {
+		video_device2 = argv[3];
+	}
+
     fp = fopen(argv[1], "rb");
-    fread(colormap, sizeof(unsigned char), 768, fp);  // read 256 rgb values
+    if (!fp) {
+        fprintf(stderr, "Error opening palette file %s\n", argv[1]);
+        exit(1);
+    }
+    if (fread(colormap, sizeof(unsigned char), 768, fp) != 768) {
+        fprintf(stderr, "Error reading palette file %s\n", argv[1]);
+        fclose(fp);
+        exit(1);
+    }
     fclose(fp);
 
   while (1)
   {
     EPloop(colormap);
   }
-
-  
 } 
