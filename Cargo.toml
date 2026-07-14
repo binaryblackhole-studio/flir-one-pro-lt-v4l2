@@ -1,0 +1,10 @@
+[package]
+name = "flir-one-pro-lt-v4l2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusb = "0.9"
+nix = { version = "0.27", features = ["ioctl", "fs"] }
+libc = "0.2"
+chrono = "0.4"
