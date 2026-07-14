@@ -71,8 +71,11 @@ gst-launch-1.0 v4l2src device=/dev/video2 ! decodebin ! autovideosink
 ```
 
 ## Project Structure
-- [src/flirone.c](file:///home/rafael/BinaryBlackhole/flir-one-pro-lt-v4l2/src/flirone.c): Main driver logic, handles libusb configuration, bulk transfers, thermal RAW conversion, text box drawing, and v4l2 loopback output.
-- [src/font5x7.h](file:///home/rafael/BinaryBlackhole/flir-one-pro-lt-v4l2/src/font5x7.h): ASCII font map for printing temperature text overlays on the frame.
-- [src/plank.h](file:///home/rafael/BinaryBlackhole/flir-one-pro-lt-v4l2/src/plank.h): Constants and formulas used to convert raw infrared values into temperature (Celsius).
-- [palettes/](file:///home/rafael/BinaryBlackhole/flir-one-pro-lt-v4l2/palettes): Contains raw palette files for mapping temperature ranges to distinct colors.
-- [scripts/](file:///home/rafael/BinaryBlackhole/flir-one-pro-lt-v4l2/scripts): Example helper scripts to load loopback devices or launch gstreamer pipelines.
+- [src/flirone.c](src/flirone.c): Main driver logic, handles libusb configuration, bulk transfers, thermal RAW conversion, text box drawing, and v4l2 loopback output.
+- [src/font5x7.h](src/font5x7.h): ASCII font map for printing temperature text overlays on the frame.
+- [src/plank.h](src/plank.h): Constants and formulas used to convert raw infrared values into temperature (Celsius).
+- [palettes/](palettes): Contains raw palette files for mapping temperature ranges to distinct colors.
+- [scripts/](scripts): Example helper scripts to load loopback devices or launch gstreamer pipelines.
+
+## Credits
+This driver is based on the reverse-engineered Linux driver implementation from **[fnoop/flirone-v4l2](https://github.com/fnoop/flirone-v4l2)**.
