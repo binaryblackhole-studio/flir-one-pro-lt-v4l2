@@ -3,18 +3,18 @@
 > [!WARNING]
 > This repository is vibe coded.
 
-This directory contains a C-based Linux user-space driver for the **FLIR One Pro LT** and **FLIR One Gen 3** thermal cameras. It captures thermal and visual frames over USB via `libusb` and feeds them into `v4l2loopback` devices so they can be read by standard Linux video tools.
+This directory contains a Rust-based Linux user-space driver for the **FLIR One Pro LT** and **FLIR One Gen 3** thermal cameras. It captures thermal and visual frames over USB via `libusb` (wrapped safely in `rusb`) and feeds them into `v4l2loopback` devices so they can be read by standard Linux video tools.
 
 Unlike the FLIR One Pro (which has a 160x120 thermal resolution), the FLIR One Pro LT and FLIR One Gen 3 have a native thermal resolution of **80x60**. This driver is configured to process and display the 80x60 thermal resolution format.
 
 ## Requirements
 
-You must install the following development packages and the kernel module for virtual loopback devices:
+You must install the following development packages, Rust toolchain, and the kernel module for virtual loopback devices:
 
 ```bash
 # Debian/Ubuntu dependencies
 sudo apt-get update
-sudo apt-get install -y libusb-1.0-0-dev libjpeg-dev pkg-config v4l2loopback-dkms
+sudo apt-get install -y libusb-1.0-0-dev libjpeg-dev pkg-config v4l2loopback-dkms cargo
 ```
 
 ## Compilation
@@ -71,9 +71,8 @@ gst-launch-1.0 v4l2src device=/dev/video2 ! decodebin ! autovideosink
 ```
 
 ## Project Structure
-- [src/flirone.c](src/flirone.c): Main driver logic, handles libusb configuration, bulk transfers, thermal RAW conversion, text box drawing, and v4l2 loopback output.
-- [src/font5x7.h](src/font5x7.h): ASCII font map for printing temperature text overlays on the frame.
-- [src/plank.h](src/plank.h): Constants and formulas used to convert raw infrared values into temperature (Celsius).
+- [src/main.rs](src/main.rs): Complete safe Rust driver implementation, covering device scanning, bulk data processing, text boxes, and V4L2 raw writes.
+- [Cargo.toml](Cargo.toml): Declares Rust project configuration and library dependencies (`rusb`, `nix`, `libc`, `chrono`).
 - [palettes/](palettes): Contains raw palette files for mapping temperature ranges to distinct colors.
 - [scripts/](scripts): Example helper scripts to load loopback devices or launch gstreamer pipelines.
 
