@@ -1,0 +1,15 @@
+# Compiled binary
+flirone
+
+# Object files and archives
+*.o
+*.a
+*.la
+*.lo
+
+# Editor backups
+*~
+*.swp
+
+# OS generated files
+.DS_Store
