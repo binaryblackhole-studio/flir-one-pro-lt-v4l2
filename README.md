@@ -37,7 +37,7 @@ make clean
 The driver expects specific virtual video devices (usually `/dev/video1` for visual MJPEG stream, and `/dev/video3` for the colorized RGB thermal stream). You can load the `v4l2loopback` module with the required settings:
 
 ```bash
-sudo modprobe v4l2loopback exclusive_caps=0,0 video_nr=1,2,3
+sudo modprobe v4l2loopback exclusive_caps=1,1,1 video_nr=1,2,3
 ```
 
 *Note: Depending on your system's existing cameras, you may want to customize the `video_nr` devices.*
