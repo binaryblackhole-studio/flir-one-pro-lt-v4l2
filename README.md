@@ -42,7 +42,20 @@ sudo modprobe v4l2loopback exclusive_caps=1,1,1 video_nr=1,2,3
 
 *Note: Depending on your system's existing cameras, you may want to customize the `video_nr` devices.*
 
-### 2. Run the Driver
+### 2. Identify and List V4L2 Devices
+If you have multiple camera devices connected, you can list all active video inputs and virtual loopbacks on your system using the `v4l2-ctl` utility (from the `v4l-utils` package):
+
+```bash
+# Install the utility if not already present
+sudo apt install v4l-utils
+
+# List all video devices
+v4l2-ctl --list-devices
+```
+
+This will print your video sources grouped by their card labels (including the custom labels we configured for the loopback module, such as `"FLIR One Visual"` and `"FLIR One Thermal"`), showing you exactly which `/dev/video*` paths correspond to which stream.
+
+### 3. Run the Driver
 Start the driver by passing a color palette raw file using the `-p` or `--palette` flag:
 
 ```bash
@@ -60,7 +73,7 @@ sudo ./flirone -p palettes/Rainbow.raw -v /dev/video4 -t /dev/video5
 ```
 *(Running with `sudo` or having proper udev rules configured is required to allow `libusb` access to the USB device).*
 
-### 3. View the Stream
+### 4. View the Stream
 You can view the colorized thermal stream on `/dev/video3` using standard tools such as `ffplay` or `gstreamer`:
 
 ```bash
