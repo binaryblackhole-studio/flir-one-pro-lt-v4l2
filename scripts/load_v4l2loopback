@@ -1,1 +1,1 @@
-sudo modprobe v4l2loopback exclusive_caps=0,0 video_nr=1,2,3
+sudo modprobe v4l2loopback exclusive_caps=1,1,1 video_nr=1,2,3 card_label="FLIR One Gray,FLIR One Visual,FLIR One Thermal"
