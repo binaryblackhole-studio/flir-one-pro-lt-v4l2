@@ -587,11 +587,11 @@ struct CliArgs {
     fov_crop: f64,
 
     /// Horizontal pixel offset to align visual edges with the thermal image (default: 0)
-    #[arg(long, default_value_t = 0)]
+    #[arg(long, default_value_t = 0, allow_hyphen_values = true)]
     x_offset: i32,
 
     /// Vertical pixel offset to align visual edges with the thermal image (default: 0)
-    #[arg(long, default_value_t = 0)]
+    #[arg(long, default_value_t = 0, allow_hyphen_values = true)]
     y_offset: i32,
 }
 
