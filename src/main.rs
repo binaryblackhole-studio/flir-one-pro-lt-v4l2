@@ -306,6 +306,7 @@ struct DriverState {
     fov_crop: f64,
     x_offset: i32,
     y_offset: i32,
+    edge_threshold: u16,
 }
 
 impl DriverState {
@@ -515,7 +516,7 @@ impl DriverState {
 
                             if (0..320).contains(&target_x) && (0..240).contains(&target_y) {
                                 let grad = edges.get_pixel(x, y)[0];
-                                if grad > 150 {
+                                if grad > self.edge_threshold {
                                     // Outline strength threshold
                                     upscaled_thermal.put_pixel(
                                         target_x as u32,
@@ -593,6 +594,10 @@ struct CliArgs {
     /// Vertical pixel offset to align visual edges with the thermal image (default: 0)
     #[arg(long, default_value_t = 0, allow_hyphen_values = true)]
     y_offset: i32,
+
+    /// Edge magnitude threshold for Sobel edge detection (default: 150, lower is more sensitive)
+    #[arg(long, default_value_t = 150)]
+    edge_threshold: u16,
 }
 
 #[allow(unreachable_code)]
@@ -690,6 +695,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fov_crop: args.fov_crop,
         x_offset: args.x_offset,
         y_offset: args.y_offset,
+        edge_threshold: args.edge_threshold,
     };
 
     println!("Initializing USB subsystem...");
