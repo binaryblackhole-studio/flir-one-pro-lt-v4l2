@@ -237,8 +237,12 @@ fn setup_v4l2_device(
     let fd = file.as_raw_fd();
 
     let mut caps: v4l2_capability = unsafe { std::mem::zeroed() };
-    unsafe { vidioc_querycap(fd, &mut caps) }
-        .map_err(|e| format!("VIDIOC_QUERYCAP failed on {}: {} (Is this a valid V4L2 device?)", device_path, e))?;
+    unsafe { vidioc_querycap(fd, &mut caps) }.map_err(|e| {
+        format!(
+            "VIDIOC_QUERYCAP failed on {}: {} (Is this a valid V4L2 device?)",
+            device_path, e
+        )
+    })?;
 
     let mut fmt: v4l2_format = unsafe { std::mem::zeroed() };
     fmt.type_ = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -551,24 +555,56 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .open_device_with_vid_pid(VENDOR_ID, PRODUCT_ID)
         .ok_or("Could not open FLIR One USB device. Is it connected?")?;
 
-    // Detach kernel driver automatically if UVC claims the camera interface
+    // Detach kernel drivers from interfaces 0, 1, 2 if they are active
+    for iface in 0..=2 {
+        if handle.kernel_driver_active(iface).unwrap_or(false) {
+            println!("Detaching kernel driver from interface {}...", iface);
+            let _ = handle.detach_kernel_driver(iface);
+        }
+    }
+
     let _ = handle.set_auto_detach_kernel_driver(true);
 
-    handle.set_active_configuration(3)?;
-    handle.claim_interface(0)?;
-    handle.claim_interface(1)?;
-    handle.claim_interface(2)?;
+    let active_config = handle.active_configuration().unwrap_or(0);
+    if active_config != 3 {
+        println!(
+            "Setting active USB configuration from {} to 3...",
+            active_config
+        );
+        if let Err(e) = handle.set_active_configuration(3) {
+            println!(
+                "Warning: set_active_configuration(3) failed: {:?}. Attempting to continue...",
+                e
+            );
+        }
+    } else {
+        println!("USB configuration 3 is already active.");
+    }
+
+    handle
+        .claim_interface(0)
+        .map_err(|e| format!("Failed to claim USB interface 0: {:?}", e))?;
+    handle
+        .claim_interface(1)
+        .map_err(|e| format!("Failed to claim USB interface 1: {:?}", e))?;
+    handle
+        .claim_interface(2)
+        .map_err(|e| format!("Failed to claim USB interface 2: {:?}", e))?;
     println!("Successfully claimed FLIR One interfaces 0, 1, 2");
 
     // USB Setup transfers
     println!("Configuring FLIR One G2/Gen3 USB streaming setup...");
-    handle.write_control(1, 0x0b, 0, 2, &[], Duration::from_millis(100))
+    handle
+        .write_control(1, 0x0b, 0, 2, &[], Duration::from_millis(100))
         .map_err(|e| format!("Control Out error (stop interface 2): {:?}", e))?;
-    handle.write_control(1, 0x0b, 0, 1, &[], Duration::from_millis(100))
+    handle
+        .write_control(1, 0x0b, 0, 1, &[], Duration::from_millis(100))
         .map_err(|e| format!("Control Out error (stop interface 1): {:?}", e))?;
-    handle.write_control(1, 0x0b, 1, 1, &[], Duration::from_millis(100))
+    handle
+        .write_control(1, 0x0b, 1, 1, &[], Duration::from_millis(100))
         .map_err(|e| format!("Control Out error (start interface 1): {:?}", e))?;
-    handle.write_control(1, 0x0b, 1, 2, &[0, 0], Duration::from_millis(200))
+    handle
+        .write_control(1, 0x0b, 1, 2, &[0, 0], Duration::from_millis(200))
         .map_err(|e| format!("Control Out error (start interface 2): {:?}", e))?;
 
     println!("Starting main USB capture loop...");
