@@ -595,16 +595,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // USB Setup transfers
     println!("Configuring FLIR One G2/Gen3 USB streaming setup...");
     handle
-        .write_control(1, 0x0b, 0, 2, &[], Duration::from_millis(100))
-        .map_err(|e| format!("Control Out error (stop interface 2): {:?}", e))?;
+        .write_control(1, 0x0b, 0, 2, &[], Duration::from_millis(1000))
+        .map_err(|e| format!("Control Out error (stop interface 2): {:?}. (Try unplugging and replugging your FLIR One device to reset its internal state if it got stuck)", e))?;
     handle
-        .write_control(1, 0x0b, 0, 1, &[], Duration::from_millis(100))
-        .map_err(|e| format!("Control Out error (stop interface 1): {:?}", e))?;
+        .write_control(1, 0x0b, 0, 1, &[], Duration::from_millis(1000))
+        .map_err(|e| format!("Control Out error (stop interface 1): {:?}. (Try unplugging and replugging your FLIR One device to reset its internal state)", e))?;
     handle
-        .write_control(1, 0x0b, 1, 1, &[], Duration::from_millis(100))
+        .write_control(1, 0x0b, 1, 1, &[], Duration::from_millis(1000))
         .map_err(|e| format!("Control Out error (start interface 1): {:?}", e))?;
     handle
-        .write_control(1, 0x0b, 1, 2, &[0, 0], Duration::from_millis(200))
+        .write_control(1, 0x0b, 1, 2, &[0, 0], Duration::from_millis(1000))
         .map_err(|e| format!("Control Out error (start interface 2): {:?}", e))?;
 
     println!("Starting main USB capture loop...");
