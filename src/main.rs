@@ -468,6 +468,7 @@ struct CliArgs {
     thermal_device: String,
 }
 
+#[allow(unreachable_code)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = CliArgs::parse();
 
@@ -565,6 +566,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Starting main USB capture loop...");
     let mut usb_buf = vec![0u8; 1048576];
+    let mut last_error = None;
 
     loop {
         // Read streaming video chunk from endpoint 0x85
@@ -578,8 +580,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Timeouts are expected when waiting for new frame packets
             }
             Err(e) => {
-                eprintln!("USB error on EP 0x85 bulk read: {:?}", e);
-                break;
+                if last_error != Some(e) {
+                    last_error = Some(e);
+                    eprintln!("USB error on EP 0x85 bulk read: {:?}", e);
+                }
+                std::thread::sleep(Duration::from_millis(1000));
             }
         }
 
