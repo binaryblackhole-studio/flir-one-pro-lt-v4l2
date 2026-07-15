@@ -399,8 +399,8 @@ impl DriverState {
                 let line2_trimmed = &line2[..max_chars.min(line2.len())];
                 font_write(&mut fb_proc, 1, FRAME_HEIGHT0 + 8, line2_trimmed);
             }
-        } else {
-            // Draw crosshairs
+
+            // Draw crosshairs and temperature indicators
             font_write(
                 &mut fb_proc,
                 FRAME_WIDTH0 / 2 - 2,
