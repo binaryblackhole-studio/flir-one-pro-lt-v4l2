@@ -234,11 +234,13 @@ fn setup_v4l2_device(
     pixelformat: u32,
     sizeimage: u32,
     bytesperline: u32,
+    device_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let fd = file.as_raw_fd();
 
     let mut caps: v4l2_capability = unsafe { std::mem::zeroed() };
-    unsafe { vidioc_querycap(fd, &mut caps) }?;
+    unsafe { vidioc_querycap(fd, &mut caps) }
+        .map_err(|e| format!("VIDIOC_QUERYCAP failed on {}: {} (Is this a valid V4L2 device?)", device_path, e))?;
 
     let mut fmt: v4l2_format = unsafe { std::mem::zeroed() };
     fmt.type_ = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -259,7 +261,11 @@ fn setup_v4l2_device(
     }
 
     // Set new format
-    unsafe { vidioc_s_fmt(fd, &mut fmt) }?;
+    unsafe { vidioc_s_fmt(fd, &mut fmt) }
+        .map_err(|e| format!(
+            "VIDIOC_S_FMT failed on {}: {} (This device may not support video OUTPUT. Are you sure this is a v4l2loopback device and not a physical webcam?)",
+            device_path, e
+        ))?;
 
     Ok(())
 }
@@ -518,6 +524,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         mjpeg_fourcc,
         (FRAME_WIDTH1 * FRAME_HEIGHT1) as u32,
         FRAME_WIDTH1 as u32,
+        video_device1,
     )?;
 
     setup_v4l2_device(
@@ -527,6 +534,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         rgb24_fourcc,
         (FRAME_WIDTH2 * FRAME_HEIGHT2 * 3) as u32,
         FRAME_WIDTH2 as u32, // Match C version's bytesperline setting (width)
+        video_device2,
     )?;
 
     let mut state = DriverState {
