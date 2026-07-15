@@ -70,6 +70,18 @@ If you want to enable the bottom overlay text showing the local time and tempera
 sudo ./flirone --palette palettes/Rainbow.raw --with-info
 ```
 
+### Aligning Visual and Thermal FOV (MSX Calibration)
+Since the physical visual camera has a wider Field of View (FOV) and is offset from the thermal camera, you can compensate for the FOV mismatch and parallax shifts by passing three optional parameters when using `--merge`:
+
+- `--fov-crop <PERCENTAGE>`: Crops the center of the visual camera image before extracting edges (default: `70.0`, representing 70% of the image size).
+- `--x-offset <PIXELS>`: Horizontally shifts the visual outlines relative to the thermal image (default: `0`, positive values shift right).
+- `--y-offset <PIXELS>`: Vertically shifts the visual outlines relative to the thermal image (default: `0`, positive values shift down).
+
+```bash
+# Example: crop to 68% and shift outlines right by 5 pixels and down by 3 pixels to align perfectly
+sudo ./flirone --palette palettes/Rainbow.raw --merge --fov-crop 68.0 --x-offset 5 --y-offset 3
+```
+
 If you have other video devices active on your system, you can pass custom device paths as named arguments:
 
 ```bash
