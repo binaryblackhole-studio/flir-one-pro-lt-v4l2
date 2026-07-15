@@ -269,6 +269,20 @@ fn setup_v4l2_device(
             device_path, e
         ))?;
 
+    // Verify format was successfully applied (detect locked formats from other running applications)
+    let mut verified_fmt: v4l2_format = unsafe { std::mem::zeroed() };
+    verified_fmt.type_ = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+    let _ = unsafe { vidioc_g_fmt(fd, &mut verified_fmt) };
+    unsafe {
+        let pix = &verified_fmt.fmt.pix;
+        if pix.width != width || pix.height != height {
+            return Err(format!(
+                "Failed to set format on {}: Requested {}x{}, but device is locked at {}x{}. (Please close all other applications using {}, such as Chrome, OBS, or ffplay, and restart this driver to apply the new resolution.)",
+                device_path, width, height, pix.width, pix.height, device_path
+            ).into());
+        }
+    }
+
     Ok(())
 }
 
