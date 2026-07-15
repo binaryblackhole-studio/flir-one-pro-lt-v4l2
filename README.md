@@ -76,10 +76,11 @@ Since the physical visual camera has a wider Field of View (FOV) and is offset f
 - `--fov-crop <PERCENTAGE>`: Crops the center of the visual camera image before extracting edges (default: `70.0`, representing 70% of the image size).
 - `--x-offset <PIXELS>`: Horizontally shifts the visual outlines relative to the thermal image (default: `0`, positive values shift right).
 - `--y-offset <PIXELS>`: Vertically shifts the visual outlines relative to the thermal image (default: `0`, positive values shift down).
+- `--edge-threshold <VALUE>`: Edge magnitude sensitivity threshold for Sobel filtering (default: `150`, lower values extract more detail/noise, higher values restrict to prominent edges).
 
 ```bash
-# Example: crop to 68% and shift outlines right by 5 pixels and down by 3 pixels to align perfectly
-sudo ./flirone --palette palettes/Rainbow.raw --merge --fov-crop 68.0 --x-offset 5 --y-offset 3
+# Example: crop to 68%, shift offsets, and make edges highly sensitive (threshold 100)
+sudo ./flirone --palette palettes/Rainbow.raw --merge --fov-crop 68.0 --x-offset -5 --y-offset -3 --edge-threshold 100
 ```
 
 If you have other video devices active on your system, you can pass custom device paths as named arguments:
