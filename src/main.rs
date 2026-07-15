@@ -551,6 +551,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .open_device_with_vid_pid(VENDOR_ID, PRODUCT_ID)
         .ok_or("Could not open FLIR One USB device. Is it connected?")?;
 
+    // Detach kernel driver automatically if UVC claims the camera interface
+    let _ = handle.set_auto_detach_kernel_driver(true);
+
     handle.set_active_configuration(3)?;
     handle.claim_interface(0)?;
     handle.claim_interface(1)?;
@@ -559,13 +562,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // USB Setup transfers
     println!("Configuring FLIR One G2/Gen3 USB streaming setup...");
-    let _ = handle.write_control(1, 0x0b, 0, 2, &[], Duration::from_millis(100));
-    let _ = handle.write_control(1, 0x0b, 0, 1, &[], Duration::from_millis(100));
-    let _ = handle.write_control(1, 0x0b, 1, 1, &[], Duration::from_millis(100));
-    let _ = handle.write_control(1, 0x0b, 1, 2, &[0, 0], Duration::from_millis(200));
+    handle.write_control(1, 0x0b, 0, 2, &[], Duration::from_millis(100))
+        .map_err(|e| format!("Control Out error (stop interface 2): {:?}", e))?;
+    handle.write_control(1, 0x0b, 0, 1, &[], Duration::from_millis(100))
+        .map_err(|e| format!("Control Out error (stop interface 1): {:?}", e))?;
+    handle.write_control(1, 0x0b, 1, 1, &[], Duration::from_millis(100))
+        .map_err(|e| format!("Control Out error (start interface 1): {:?}", e))?;
+    handle.write_control(1, 0x0b, 1, 2, &[0, 0], Duration::from_millis(200))
+        .map_err(|e| format!("Control Out error (start interface 2): {:?}", e))?;
 
     println!("Starting main USB capture loop...");
     let mut usb_buf = vec![0u8; 1048576];
+    let mut poll_buf = vec![0u8; 1048576]; // Match the C driver's 1MB poll buffer size
     let mut last_error = None;
 
     loop {
@@ -589,7 +597,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Poll control endpoints 0x81 and 0x83 to keep connection active
-        let mut poll_buf = [0u8; 1024];
         let _ = handle.read_bulk(0x81, &mut poll_buf, Duration::from_millis(10));
         let _ = handle.read_bulk(0x83, &mut poll_buf, Duration::from_millis(10));
     }
