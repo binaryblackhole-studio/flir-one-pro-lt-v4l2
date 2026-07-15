@@ -1,4 +1,5 @@
 use clap::Parser;
+use image::GenericImageView;
 use rusb::{Context, UsbContext};
 use std::fs::File;
 use std::io::Write;
@@ -302,6 +303,9 @@ struct DriverState {
     merge: bool,
     output_width: usize,
     output_height: usize,
+    fov_crop: f64,
+    x_offset: i32,
+    y_offset: i32,
 }
 
 impl DriverState {
@@ -452,11 +456,12 @@ impl DriverState {
 
         // Apply merge visual edges if active
         let final_fb = if self.merge {
-            let mut upscaled_thermal = if let Some(thermal_img) = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(
-                FRAME_WIDTH2 as u32,
-                self.thermal_height as u32,
-                fb_proc2,
-            ) {
+            let mut upscaled_thermal = if let Some(thermal_img) =
+                image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(
+                    FRAME_WIDTH2 as u32,
+                    self.thermal_height as u32,
+                    fb_proc2,
+                ) {
                 // Upscale thermal to 320x(thermal_height * 4) using CatmullRom (bicubic)
                 image::imageops::resize(
                     &thermal_img,
@@ -472,10 +477,24 @@ impl DriverState {
             let visual_offset = 28 + thermal_size;
             if visual_offset + jpg_size <= self.buf85.len() {
                 let visual_data = &self.buf85[visual_offset..visual_offset + jpg_size];
-                if let Ok(visual_img) = image::load_from_memory_with_format(visual_data, image::ImageFormat::Jpeg) {
+                if let Ok(visual_img) =
+                    image::load_from_memory_with_format(visual_data, image::ImageFormat::Jpeg)
+                {
+                    let (vis_w, vis_h) = visual_img.dimensions();
+
+                    // Clamp FOV crop factor to a safe range (10% to 100%)
+                    let crop_factor = (self.fov_crop / 100.0).clamp(0.1, 1.0);
+                    let crop_w = (vis_w as f64 * crop_factor) as u32;
+                    let crop_h = (vis_h as f64 * crop_factor) as u32;
+                    let crop_x = vis_w.saturating_sub(crop_w) / 2;
+                    let crop_y = vis_h.saturating_sub(crop_h) / 2;
+
+                    // Crop the center of the visual image to compensate for the FOV mismatch
+                    let cropped_visual = visual_img.crop_imm(crop_x, crop_y, crop_w, crop_h);
+
                     // Downscale visual image to 320x240
                     let downscaled_visual = image::imageops::resize(
-                        &visual_img,
+                        &cropped_visual,
                         320,
                         240,
                         image::imageops::FilterType::CatmullRom,
@@ -490,9 +509,20 @@ impl DriverState {
                     // Overlay edges (visual height is 240, so we only apply on y < 240)
                     for y in 0..240 {
                         for x in 0..320 {
-                            let grad = edges.get_pixel(x, y)[0];
-                            if grad > 150 { // Outline strength threshold
-                                upscaled_thermal.put_pixel(x, y, image::Rgb([0, 0, 0]));
+                            // Apply parallax offsets
+                            let target_x = x as i32 + self.x_offset;
+                            let target_y = y as i32 + self.y_offset;
+
+                            if (0..320).contains(&target_x) && (0..240).contains(&target_y) {
+                                let grad = edges.get_pixel(x, y)[0];
+                                if grad > 150 {
+                                    // Outline strength threshold
+                                    upscaled_thermal.put_pixel(
+                                        target_x as u32,
+                                        target_y as u32,
+                                        image::Rgb([0, 0, 0]),
+                                    );
+                                }
                             }
                         }
                     }
@@ -551,6 +581,18 @@ struct CliArgs {
     /// Merge visual edges on top of upscaled thermal image (outputs 320x240/304 stream to the thermal device)
     #[arg(long, default_value_t = false)]
     merge: bool,
+
+    /// Crop factor (percentage, 0-100) to compensate for the wider FOV of the visual camera (default: 70.0)
+    #[arg(long, default_value_t = 70.0)]
+    fov_crop: f64,
+
+    /// Horizontal pixel offset to align visual edges with the thermal image (default: 0)
+    #[arg(long, default_value_t = 0)]
+    x_offset: i32,
+
+    /// Vertical pixel offset to align visual edges with the thermal image (default: 0)
+    #[arg(long, default_value_t = 0)]
+    y_offset: i32,
 }
 
 #[allow(unreachable_code)]
@@ -645,6 +687,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         merge: args.merge,
         output_width: thermal_width,
         output_height: thermal_height_v4l2,
+        fov_crop: args.fov_crop,
+        x_offset: args.x_offset,
+        y_offset: args.y_offset,
     };
 
     println!("Initializing USB subsystem...");
