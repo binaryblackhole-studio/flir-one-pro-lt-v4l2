@@ -283,6 +283,8 @@ struct DriverState {
     ffc_state: i32,
     file_visual: File,
     file_thermal: File,
+    with_info: bool,
+    thermal_height: usize,
 }
 
 impl DriverState {
@@ -356,7 +358,7 @@ impl DriverState {
         let delta = if max == min { 1 } else { max - min } as u32;
         let scale = 0x10000 / delta;
 
-        let mut fb_proc = vec![128u8; FRAME_WIDTH2 * FRAME_HEIGHT2];
+        let mut fb_proc = vec![128u8; FRAME_WIDTH2 * self.thermal_height];
         for y in 0..FRAME_HEIGHT0 {
             for x in 0..FRAME_WIDTH0 {
                 let v = (((pix[y * FRAME_WIDTH0 + x] as i32 - min) as u32 * scale) >> 8) as u8;
@@ -364,62 +366,64 @@ impl DriverState {
             }
         }
 
-        // Generate overlay timestamp and temperatures
-        let now_str = chrono::Local::now().format("%H:%M:%S").to_string();
-        let cy = FRAME_HEIGHT0 / 2;
-        let cx = FRAME_WIDTH0 / 2;
-        let med = (pix[(cy - 1) * FRAME_WIDTH0 + (cx - 1)] as u32
-            + pix[(cy - 1) * FRAME_WIDTH0 + cx] as u32
-            + pix[cy * FRAME_WIDTH0 + (cx - 1)] as u32
-            + pix[cy * FRAME_WIDTH0 + cx] as u32)
-            / 4;
+        if self.with_info {
+            // Generate overlay timestamp and temperatures
+            let now_str = chrono::Local::now().format("%H:%M:%S").to_string();
+            let cy = FRAME_HEIGHT0 / 2;
+            let cx = FRAME_WIDTH0 / 2;
+            let med = (pix[(cy - 1) * FRAME_WIDTH0 + (cx - 1)] as u32
+                + pix[(cy - 1) * FRAME_WIDTH0 + cx] as u32
+                + pix[cy * FRAME_WIDTH0 + (cx - 1)] as u32
+                + pix[cy * FRAME_WIDTH0 + cx] as u32)
+                / 4;
 
-        let temp_str = format!(
-            "{} {:.1}/{:.1}/{:.1}'C",
-            now_str,
-            raw2temperature(min as f64),
-            raw2temperature(med as f64),
-            raw2temperature(max as f64)
-        );
+            let temp_str = format!(
+                "{} {:.1}/{:.1}/{:.1}'C",
+                now_str,
+                raw2temperature(min as f64),
+                raw2temperature(med as f64),
+                raw2temperature(max as f64)
+            );
 
-        // Split text across multiple lines for GEN3 resolution
-        let max_chars = FRAME_WIDTH0 / 6;
-        let (line1, line2) = if temp_str.len() > max_chars {
-            let split_idx = max_chars.min(temp_str.len());
-            (&temp_str[..split_idx], &temp_str[split_idx..])
+            // Split text across multiple lines for GEN3 resolution
+            let max_chars = FRAME_WIDTH0 / 6;
+            let (line1, line2) = if temp_str.len() > max_chars {
+                let split_idx = max_chars.min(temp_str.len());
+                (&temp_str[..split_idx], &temp_str[split_idx..])
+            } else {
+                (temp_str.as_str(), "")
+            };
+
+            font_write(&mut fb_proc, 1, FRAME_HEIGHT0, line1);
+            if !line2.is_empty() {
+                let line2_trimmed = &line2[..max_chars.min(line2.len())];
+                font_write(&mut fb_proc, 1, FRAME_HEIGHT0 + 8, line2_trimmed);
+            }
         } else {
-            (temp_str.as_str(), "")
-        };
+            // Draw crosshairs
+            font_write(
+                &mut fb_proc,
+                FRAME_WIDTH0 / 2 - 2,
+                FRAME_HEIGHT0 / 2 - 3,
+                "+",
+            );
 
-        font_write(&mut fb_proc, 1, FRAME_HEIGHT0, line1);
-        if !line2.is_empty() {
-            let line2_trimmed = &line2[..max_chars.min(line2.len())];
-            font_write(&mut fb_proc, 1, FRAME_HEIGHT0 + 8, line2_trimmed);
+            let mut maxx_adj = (maxx as isize - 4).max(0);
+            let mut maxy_adj = (maxy as isize - 4).max(0);
+            if maxx_adj > (FRAME_WIDTH0 as isize - 10) {
+                maxx_adj = FRAME_WIDTH0 as isize - 10;
+            }
+            if maxy_adj > (FRAME_HEIGHT0 as isize - 10) {
+                maxy_adj = FRAME_HEIGHT0 as isize - 10;
+            }
+
+            font_write(&mut fb_proc, FRAME_WIDTH0 - 6, maxy_adj as usize, "<");
+            font_write(&mut fb_proc, maxx_adj as usize, FRAME_HEIGHT0 - 8, "|");
         }
-
-        // Draw crosshairs
-        font_write(
-            &mut fb_proc,
-            FRAME_WIDTH0 / 2 - 2,
-            FRAME_HEIGHT0 / 2 - 3,
-            "+",
-        );
-
-        let mut maxx_adj = (maxx as isize - 4).max(0);
-        let mut maxy_adj = (maxy as isize - 4).max(0);
-        if maxx_adj > (FRAME_WIDTH0 as isize - 10) {
-            maxx_adj = FRAME_WIDTH0 as isize - 10;
-        }
-        if maxy_adj > (FRAME_HEIGHT0 as isize - 10) {
-            maxy_adj = FRAME_HEIGHT0 as isize - 10;
-        }
-
-        font_write(&mut fb_proc, FRAME_WIDTH0 - 6, maxy_adj as usize, "<");
-        font_write(&mut fb_proc, maxx_adj as usize, FRAME_HEIGHT0 - 8, "|");
 
         // Colorize thermal frame buffer using selected palette
-        let mut fb_proc2 = vec![0u8; FRAME_WIDTH2 * FRAME_HEIGHT2 * 3];
-        for y in 0..FRAME_HEIGHT2 {
+        let mut fb_proc2 = vec![0u8; FRAME_WIDTH2 * self.thermal_height * 3];
+        for y in 0..self.thermal_height {
             for x in 0..FRAME_WIDTH2 {
                 let v = fb_proc[y * FRAME_WIDTH2 + x] as usize;
                 let out_idx = 3 * (y * FRAME_WIDTH2 + x);
@@ -470,6 +474,10 @@ struct CliArgs {
     /// Path to the thermal V4L2 loopback device
     #[arg(short, long, default_value = "/dev/video3")]
     thermal_device: String,
+
+    /// Enable the bottom text info area (expands height from 60 to 76 pixels). If set, the black crosshair and hot/cold line indicators are hidden.
+    #[arg(long, default_value_t = false)]
+    with_info: bool,
 }
 
 #[allow(unreachable_code)]
@@ -530,12 +538,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         video_device1,
     )?;
 
+    let thermal_height = if args.with_info {
+        FRAME_HEIGHT2
+    } else {
+        FRAME_HEIGHT0
+    };
+
     setup_v4l2_device(
         &file_thermal,
         FRAME_WIDTH2 as u32,
-        FRAME_HEIGHT2 as u32,
+        thermal_height as u32,
         rgb24_fourcc,
-        (FRAME_WIDTH2 * FRAME_HEIGHT2 * 3) as u32,
+        (FRAME_WIDTH2 * thermal_height * 3) as u32,
         FRAME_WIDTH2 as u32, // Match C version's bytesperline setting (width)
         video_device2,
     )?;
@@ -547,6 +561,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ffc_state: 0,
         file_visual,
         file_thermal,
+        with_info: args.with_info,
+        thermal_height,
     };
 
     println!("Initializing USB subsystem...");
