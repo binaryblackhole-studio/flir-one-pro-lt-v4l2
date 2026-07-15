@@ -200,10 +200,8 @@ pub struct v4l2_pix_format {
 #[repr(C)]
 pub union v4l2_format_union {
     pub pix: v4l2_pix_format,
-    #[cfg(target_pointer_width = "64")]
-    pub raw_data: [u8; 204],
-    #[cfg(target_pointer_width = "32")]
     pub raw_data: [u8; 200],
+    pub align: usize, // Forces pointer-sized alignment (8 bytes on 64-bit, 4 on 32-bit)
 }
 
 #[repr(C)]
