@@ -3,18 +3,18 @@
 > [!WARNING]
 > This repository is vibe coded.
 
-This directory contains a C-based Linux user-space driver for the **FLIR One Pro LT** and **FLIR One Gen 3** thermal cameras. It captures thermal and visual frames over USB via `libusb` and feeds them into `v4l2loopback` devices so they can be read by standard Linux video tools.
+This directory contains a Rust-based Linux user-space driver for the **FLIR One Pro LT** and **FLIR One Gen 3** thermal cameras. It captures thermal and visual frames over USB via `libusb` (wrapped safely in `rusb`) and feeds them into `v4l2loopback` devices so they can be read by standard Linux video tools.
 
 Unlike the FLIR One Pro (which has a 160x120 thermal resolution), the FLIR One Pro LT and FLIR One Gen 3 have a native thermal resolution of **80x60**. This driver is configured to process and display the 80x60 thermal resolution format.
 
 ## Requirements
 
-You must install the following development packages and the kernel module for virtual loopback devices:
+You must install the following development packages, Rust toolchain, and the kernel module for virtual loopback devices:
 
 ```bash
 # Debian/Ubuntu dependencies
 sudo apt-get update
-sudo apt-get install -y libusb-1.0-0-dev libjpeg-dev pkg-config v4l2loopback-dkms
+sudo apt-get install -y libusb-1.0-0-dev libjpeg-dev pkg-config v4l2loopback-dkms cargo
 ```
 
 ## Compilation
@@ -42,24 +42,59 @@ sudo modprobe v4l2loopback exclusive_caps=1,1,1 video_nr=1,2,3
 
 *Note: Depending on your system's existing cameras, you may want to customize the `video_nr` devices.*
 
-### 2. Run the Driver
-Start the driver by passing a color palette raw file. By default, it expects `/dev/video2` for the visual camera stream and `/dev/video3` for the thermal camera stream:
+### 2. Identify and List V4L2 Devices
+If you have multiple camera devices connected, you can list all active video inputs and virtual loopbacks on your system using the `v4l2-ctl` utility (from the `v4l-utils` package):
 
 ```bash
-sudo ./flirone palettes/Rainbow.raw
+# Install the utility if not already present
+sudo apt install v4l-utils
+
+# List all video devices
+v4l2-ctl --list-devices
 ```
 
-If you have other video devices active on your system, you can pass custom device paths as optional arguments:
+This will print your video sources grouped by their card labels (including the custom labels we configured for the loopback module, such as `"FLIR One Visual"` and `"FLIR One Thermal"`), showing you exactly which `/dev/video*` paths correspond to which stream.
+
+### 3. Run the Driver
+Start the driver by passing a color palette raw file using the `-p` or `--palette` flag. 
+
+By default, the driver outputs the native **80x60** thermal stream without any bottom text area (which allows Chrome/WebRTC to capture the standard 4:3 camera stream correctly). 
 
 ```bash
-sudo ./flirone palettes/Rainbow.raw [visual_device_path] [thermal_device_path]
+sudo ./flirone --palette palettes/Rainbow.raw
+```
 
-# Example:
-sudo ./flirone palettes/Rainbow.raw /dev/video4 /dev/video5
+If you want to enable the bottom overlay text showing the local time and temperature readouts, add the `--with-info` flag (which expands the frame height to **80x76** pixels). Enabling this flag also automatically hides the black indicators (crosshair and hot/cold line indicators) on the image:
+
+```bash
+sudo ./flirone --palette palettes/Rainbow.raw --with-info
+```
+
+### Aligning Visual and Thermal FOV (MSX Calibration)
+Since the physical visual camera has a wider Field of View (FOV) and is offset from the thermal camera, you can compensate for the FOV mismatch and parallax shifts by passing three optional parameters when using `--merge`:
+
+- `--fov-crop <PERCENTAGE>`: Crops the center of the visual camera image before extracting edges (default: `70.0`, representing 70% of the image size).
+- `--x-offset <PIXELS>`: Horizontally shifts the visual outlines relative to the thermal image (default: `0`, positive values shift right).
+- `--y-offset <PIXELS>`: Vertically shifts the visual outlines relative to the thermal image (default: `0`, positive values shift down).
+- `--edge-threshold <VALUE>`: Edge magnitude sensitivity threshold for Sobel filtering (default: `150`, lower values extract more detail/noise, higher values restrict to prominent edges).
+
+```bash
+# Example: crop to 68%, shift offsets, and make edges highly sensitive (threshold 100)
+sudo ./flirone --palette palettes/Rainbow.raw --merge --fov-crop 68.0 --x-offset -5 --y-offset -3 --edge-threshold 100
+```
+
+If you have other video devices active on your system, you can pass custom device paths as named arguments:
+
+```bash
+# Using long options
+sudo ./flirone --palette palettes/Rainbow.raw --visual-device /dev/video4 --thermal-device /dev/video5
+
+# Or short options
+sudo ./flirone -p palettes/Rainbow.raw -v /dev/video4 -t /dev/video5
 ```
 *(Running with `sudo` or having proper udev rules configured is required to allow `libusb` access to the USB device).*
 
-### 3. View the Stream
+### 4. View the Stream
 You can view the colorized thermal stream on `/dev/video3` using standard tools such as `ffplay` or `gstreamer`:
 
 ```bash
@@ -71,9 +106,8 @@ gst-launch-1.0 v4l2src device=/dev/video2 ! decodebin ! autovideosink
 ```
 
 ## Project Structure
-- [src/flirone.c](src/flirone.c): Main driver logic, handles libusb configuration, bulk transfers, thermal RAW conversion, text box drawing, and v4l2 loopback output.
-- [src/font5x7.h](src/font5x7.h): ASCII font map for printing temperature text overlays on the frame.
-- [src/plank.h](src/plank.h): Constants and formulas used to convert raw infrared values into temperature (Celsius).
+- [src/main.rs](src/main.rs): Complete safe Rust driver implementation, covering device scanning, bulk data processing, text boxes, and V4L2 raw writes.
+- [Cargo.toml](Cargo.toml): Declares Rust project configuration and library dependencies (`rusb`, `nix`, `libc`, `chrono`).
 - [palettes/](palettes): Contains raw palette files for mapping temperature ranges to distinct colors.
 - [scripts/](scripts): Example helper scripts to load loopback devices or launch gstreamer pipelines.
 
