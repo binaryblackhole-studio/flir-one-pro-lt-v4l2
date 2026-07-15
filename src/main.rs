@@ -200,7 +200,10 @@ pub struct v4l2_pix_format {
 #[repr(C)]
 pub union v4l2_format_union {
     pub pix: v4l2_pix_format,
+    #[cfg(target_pointer_width = "64")]
     pub raw_data: [u8; 204],
+    #[cfg(target_pointer_width = "32")]
+    pub raw_data: [u8; 200],
 }
 
 #[repr(C)]
@@ -209,7 +212,11 @@ pub struct v4l2_format {
     pub fmt: v4l2_format_union,
 }
 
+#[cfg(target_pointer_width = "64")]
 const _: () = assert!(std::mem::size_of::<v4l2_format>() == 208);
+#[cfg(target_pointer_width = "32")]
+const _: () = assert!(std::mem::size_of::<v4l2_format>() == 204);
+
 const _: () = assert!(std::mem::size_of::<v4l2_capability>() == 104);
 
 const V4L2_BUF_TYPE_VIDEO_OUTPUT: u32 = 2;
