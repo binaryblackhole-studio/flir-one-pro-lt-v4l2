@@ -56,10 +56,18 @@ v4l2-ctl --list-devices
 This will print your video sources grouped by their card labels (including the custom labels we configured for the loopback module, such as `"FLIR One Visual"` and `"FLIR One Thermal"`), showing you exactly which `/dev/video*` paths correspond to which stream.
 
 ### 3. Run the Driver
-Start the driver by passing a color palette raw file using the `-p` or `--palette` flag:
+Start the driver by passing a color palette raw file using the `-p` or `--palette` flag. 
+
+By default, the driver outputs the native **80x60** thermal stream without any bottom text area (which allows Chrome/WebRTC to capture the standard 4:3 camera stream correctly). 
 
 ```bash
 sudo ./flirone --palette palettes/Rainbow.raw
+```
+
+If you want to enable the bottom overlay text showing the local time and temperature readouts, add the `--with-info` flag (which expands the frame height to **80x76** pixels). Enabling this flag also automatically hides the black indicators (crosshair and hot/cold line indicators) on the image:
+
+```bash
+sudo ./flirone --palette palettes/Rainbow.raw --with-info
 ```
 
 If you have other video devices active on your system, you can pass custom device paths as named arguments:
