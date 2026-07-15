@@ -285,6 +285,9 @@ struct DriverState {
     file_thermal: File,
     with_info: bool,
     thermal_height: usize,
+    merge: bool,
+    output_width: usize,
+    output_height: usize,
 }
 
 impl DriverState {
@@ -433,12 +436,64 @@ impl DriverState {
             }
         }
 
-        // Write MJPEG visual stream directly to fdwr1
-        let visual_offset = 28 + thermal_size;
-        if visual_offset + jpg_size <= self.buf85.len() {
-            let visual_data = &self.buf85[visual_offset..visual_offset + jpg_size];
-            let _ = self.file_visual.write_all(visual_data);
-        }
+        // Apply merge visual edges if active
+        let final_fb = if self.merge {
+            let mut upscaled_thermal = if let Some(thermal_img) = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(
+                FRAME_WIDTH2 as u32,
+                self.thermal_height as u32,
+                fb_proc2,
+            ) {
+                // Upscale thermal to 320x(thermal_height * 4) using CatmullRom (bicubic)
+                image::imageops::resize(
+                    &thermal_img,
+                    self.output_width as u32,
+                    self.output_height as u32,
+                    image::imageops::FilterType::CatmullRom,
+                )
+            } else {
+                image::ImageBuffer::new(self.output_width as u32, self.output_height as u32)
+            };
+
+            // Extract visual JPEG and perform Sobel edge detection overlay
+            let visual_offset = 28 + thermal_size;
+            if visual_offset + jpg_size <= self.buf85.len() {
+                let visual_data = &self.buf85[visual_offset..visual_offset + jpg_size];
+                if let Ok(visual_img) = image::load_from_memory_with_format(visual_data, image::ImageFormat::Jpeg) {
+                    // Downscale visual image to 320x240
+                    let downscaled_visual = image::imageops::resize(
+                        &visual_img,
+                        320,
+                        240,
+                        image::imageops::FilterType::CatmullRom,
+                    );
+
+                    // Convert to grayscale for edge gradients
+                    let gray_visual = image::imageops::colorops::grayscale(&downscaled_visual);
+
+                    // Run Sobel edge filter
+                    let edges = imageproc::gradients::sobel_gradients(&gray_visual);
+
+                    // Overlay edges (visual height is 240, so we only apply on y < 240)
+                    for y in 0..240 {
+                        for x in 0..320 {
+                            let grad = edges.get_pixel(x, y)[0];
+                            if grad > 150 { // Outline strength threshold
+                                upscaled_thermal.put_pixel(x, y, image::Rgb([0, 0, 0]));
+                            }
+                        }
+                    }
+                }
+            }
+            upscaled_thermal.into_raw()
+        } else {
+            // Write MJPEG visual stream directly to fdwr1 only when --merge is disabled
+            let visual_offset = 28 + thermal_size;
+            if visual_offset + jpg_size <= self.buf85.len() {
+                let visual_data = &self.buf85[visual_offset..visual_offset + jpg_size];
+                let _ = self.file_visual.write_all(visual_data);
+            }
+            fb_proc2
+        };
 
         // Check for FFC frame status
         let ffc_offset = 28 + thermal_size + jpg_size + 17;
@@ -451,8 +506,8 @@ impl DriverState {
             if self.ffc_state == 1 {
                 self.ffc_state = 0; // Skip first frame after FFC
             } else {
-                // Write thermal colorized RGB stream directly to fdwr2
-                let _ = self.file_thermal.write_all(&fb_proc2);
+                // Write thermal/merged colorized RGB stream directly to fdwr2
+                let _ = self.file_thermal.write_all(&final_fb);
             }
         }
 
@@ -478,6 +533,10 @@ struct CliArgs {
     /// Enable the bottom text info area (expands height from 60 to 76 pixels). If set, the black crosshair and hot/cold line indicators are hidden.
     #[arg(long, default_value_t = false)]
     with_info: bool,
+
+    /// Merge visual edges on top of upscaled thermal image (outputs 320x240/304 stream to the thermal device)
+    #[arg(long, default_value_t = false)]
+    merge: bool,
 }
 
 #[allow(unreachable_code)]
@@ -544,13 +603,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         FRAME_HEIGHT0
     };
 
+    let (thermal_width, thermal_height_v4l2) = if args.merge {
+        (320, thermal_height * 4)
+    } else {
+        (FRAME_WIDTH2, thermal_height)
+    };
+
     setup_v4l2_device(
         &file_thermal,
-        FRAME_WIDTH2 as u32,
-        thermal_height as u32,
+        thermal_width as u32,
+        thermal_height_v4l2 as u32,
         rgb24_fourcc,
-        (FRAME_WIDTH2 * thermal_height * 3) as u32,
-        FRAME_WIDTH2 as u32, // Match C version's bytesperline setting (width)
+        (thermal_width * thermal_height_v4l2 * 3) as u32,
+        thermal_width as u32, // Match C version's bytesperline setting (width)
         video_device2,
     )?;
 
@@ -563,6 +628,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         file_thermal,
         with_info: args.with_info,
         thermal_height,
+        merge: args.merge,
+        output_width: thermal_width,
+        output_height: thermal_height_v4l2,
     };
 
     println!("Initializing USB subsystem...");

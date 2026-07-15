@@ -9,3 +9,5 @@ nix = { version = "0.27", features = ["ioctl", "fs"] }
 libc = "0.2"
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+imageproc = "0.27"
